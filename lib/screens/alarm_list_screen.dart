@@ -65,6 +65,7 @@ class _AlarmListScreenState extends State<AlarmListScreen>
 
   Future<void> _deleteAlarm(String id) async {
     final oldAlarms = _alarms;
+    final oldAlarmIndex = _alarms.indexWhere((a) => a.id == id);
     await _alarmService.deleteAlarm(id);
     await _loadAlarms();
 
@@ -83,7 +84,7 @@ class _AlarmListScreenState extends State<AlarmListScreen>
           onPressed: () async {
             // 삭제된 알람을 임시 저장하고 복원
             final deletedAlarm = oldAlarms.firstWhere((a) => a.id == id);
-            await _alarmService.saveAlarm(deletedAlarm);
+            await _alarmService.saveAlarm(deletedAlarm, index: oldAlarmIndex);
             await _loadAlarms();
           },
         ),

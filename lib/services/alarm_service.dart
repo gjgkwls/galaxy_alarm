@@ -25,13 +25,15 @@ class AlarmService {
   }
 
   // 알람 저장하기
-  Future<void> saveAlarm(AlarmModel alarm) async {
+  Future<void> saveAlarm(AlarmModel alarm, {int? index}) async {
     final prefs = await SharedPreferences.getInstance();
     final alarms = await getAlarms();
 
     // 기존 알람 찾아서 대체하거나 새로운 알람 추가
     final existingIndex = alarms.indexWhere((a) => a.id == alarm.id);
-    if (existingIndex >= 0) {
+    if (index != null) {
+      alarms.insert(index, alarm);
+    } else if (existingIndex >= 0) {
       alarms[existingIndex] = alarm;
     } else {
       alarms.add(alarm);
