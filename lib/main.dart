@@ -32,6 +32,9 @@ Future<void> main() async {
   final alarmService = AlarmService();
   await alarmService.rescheduleAllAlarms();
 
+  // 자동 재활성화 알람 체크
+  await alarmService.checkAutoReenableAlarms();
+
   // 스플래시 스크린 제거 (앱 로딩 완료)
   FlutterNativeSplash.remove();
 
@@ -39,6 +42,15 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
   );
+
+  // 앱 상태 변화 감지를 위한 옵저버 추가
+  SystemChannels.lifecycle.setMessageHandler((msg) async {
+    // 앱이 포그라운드로 돌아왔을 때 자동 재활성화 체크
+    if (msg == AppLifecycleState.resumed.toString()) {
+      await alarmService.checkAutoReenableAlarms();
+    }
+    return null;
+  });
 
   runApp(const MyApp());
 }

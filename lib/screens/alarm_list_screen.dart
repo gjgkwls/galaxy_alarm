@@ -116,6 +116,32 @@ class _AlarmListScreenState extends State<AlarmListScreen>
     }
   }
 
+  // 알람 자동 재활성화 설정
+  Future<void> _setAutoReenableAlarm(String id) async {
+    await _alarmService.setAutoReenableAlarm(id);
+
+    // 설정 완료 후 알람 목록 새로고침
+    await _loadAlarms();
+
+    // 스낵바 표시
+    final alarm = _alarms.firstWhere((a) => a.id == id);
+    if (alarm.autoReenableDate != null) {
+      final month = alarm.autoReenableDate!.month;
+      final day = alarm.autoReenableDate!.day;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$month월 $day일에 알람이 자동으로 다시 켜집니다'),
+          backgroundColor: _cardColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -198,8 +224,6 @@ class _AlarmListScreenState extends State<AlarmListScreen>
                   },
                 ),
               ),
-              // 최근 비활성화된 반복 알람이 있는 경우 다시 켜기 버튼 표시
-              _buildReactivateSection(),
             ],
           );
   }
@@ -237,6 +261,9 @@ class _AlarmListScreenState extends State<AlarmListScreen>
                 onEdit: () => _navigateToEditScreen(context, alarm),
                 onDelete: () => _deleteAlarm(alarm.id),
                 onReactivate: () => _reactivateAlarm(alarm),
+                onAutoReenableSet: alarm.isRepeating && !alarm.isActive
+                    ? () => _setAutoReenableAlarm(alarm.id)
+                    : null,
                 cardColor: _cardColor,
                 textColor: _textColor,
                 secondaryTextColor: _secondaryTextColor,
@@ -247,53 +274,6 @@ class _AlarmListScreenState extends State<AlarmListScreen>
         );
       },
     );
-  }
-
-  Widget _buildReactivateSection() {
-    // 최근 비활성화된 반복 알람 찾기
-    final recentDisabledAlarm = _alarms.where((alarm) {
-      return alarm.isRepeating &&
-          !alarm.isActive &&
-          alarm.lastDisabledDate != null;
-    }).toList();
-
-    if (recentDisabledAlarm.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // 가장 최근에 비활성화된 알람 선택
-    recentDisabledAlarm.sort((a, b) => (b.lastDisabledDate ?? DateTime.now())
-        .compareTo(a.lastDisabledDate ?? DateTime.now()));
-
-    final alarm = recentDisabledAlarm.first;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.all(16.0),
-      child: ElevatedButton(
-        onPressed: () => _reactivateAlarm(alarm),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _cardColor,
-          foregroundColor: _primaryColor,
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 0,
-        ),
-        child: Text(
-          '다시 켜기 (${_formatDate(alarm.lastDisabledDate)})',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return '';
-    return '${date.month}월 ${date.day}일';
   }
 
   Widget _buildEmptyState() {

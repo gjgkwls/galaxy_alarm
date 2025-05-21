@@ -66,13 +66,14 @@ class AlarmService {
 
     if (index >= 0) {
       final alarm = alarms[index];
-      final DateTime? lastDisabledDate = !isActive && alarm.isRepeating
-          ? DateTime.now()
-          : alarm.lastDisabledDate;
+      final DateTime? lastDisabledDate =
+          !isActive && alarm.isRepeating ? getNow() : alarm.lastDisabledDate;
 
       alarms[index] = alarm.copyWith(
         isActive: isActive,
         lastDisabledDate: lastDisabledDate,
+        // 알람을 켰을 때는 자동 재활성화 날짜 제거
+        autoReenableDate: isActive ? null : alarm.autoReenableDate,
       );
 
       await _saveAlarms(alarms);
@@ -89,7 +90,8 @@ class AlarmService {
   // 알람 재활성화
   Future<void> reactivateAlarm(AlarmModel alarm) async {
     await saveAlarm(
-      alarm.copyWith(isActive: true, lastDisabledDate: null),
+      alarm.copyWith(
+          isActive: true, lastDisabledDate: null, autoReenableDate: null),
     );
   }
 
@@ -113,6 +115,11 @@ class AlarmService {
     return '${date.month}월 ${date.day}일';
   }
 
+  // 현재 시간 반환 (테스트에서 오버라이드 가능)
+  DateTime getNow() {
+    return DateTime.now();
+  }
+
   // 모든 알람 저장 (내부 헬퍼 메서드)
   Future<void> _saveAlarms(List<AlarmModel> alarms) async {
     final prefs = await SharedPreferences.getInstance();
@@ -126,7 +133,7 @@ class AlarmService {
   Future<void> _scheduleAlarm(AlarmModel alarm) async {
     try {
       // 알람 모델에서 다음 알람 시간 계산
-      final DateTime nextAlarmDate = _getNextAlarmDateTime(alarm);
+      final DateTime nextAlarmDate = getNextAlarmDateTime(alarm);
 
       // 고유 ID 생성 (문자열 id를 int로 변환)
       final int alarmId = _generateAlarmId(alarm.id);
@@ -181,7 +188,7 @@ class AlarmService {
   }
 
   // 다음 알람 시간 계산
-  DateTime _getNextAlarmDateTime(AlarmModel alarm) {
+  DateTime getNextAlarmDateTime(AlarmModel alarm) {
     final now = DateTime.now();
 
     // 기본 알람 시간 설정 (오늘)
@@ -240,5 +247,88 @@ class AlarmService {
     }
 
     return alarmDateTime.add(Duration(days: daysToAdd));
+  }
+
+  // 알람 자동 재활성화 설정
+  Future<void> setAutoReenableAlarm(String id) async {
+    final alarms = await getAlarms();
+    final index = alarms.indexWhere((alarm) => alarm.id == id);
+
+    if (index >= 0) {
+      final alarm = alarms[index];
+
+      // 비활성화된 반복 알람만 처리
+      if (!alarm.isActive && alarm.isRepeating) {
+        // 두 번째로 가까운 미래 반복 요일 계산
+        final nextReenableDate = alarm.getNextReenableDate();
+
+        if (nextReenableDate != null) {
+          final now = DateTime.now();
+          final currentTimeOfDay = TimeOfDay.fromDateTime(now);
+
+          debugPrint('===== 다시 켜기 설정 정보 =====');
+          debugPrint('현재 시간: ${now.toString()}');
+          debugPrint('알람 시간: ${alarm.time.hour}:${alarm.time.minute}');
+          debugPrint('요일 설정: ${alarm.weekdays}');
+          debugPrint('현재 요일 인덱스: ${now.weekday - 1}');
+          debugPrint('다시 켜기 날짜: ${nextReenableDate.toString()}');
+
+          // 자동 재활성화 날짜 설정
+          alarms[index] = alarm.copyWith(
+            autoReenableDate: nextReenableDate,
+          );
+
+          await _saveAlarms(alarms);
+          debugPrint('알람 자동 재활성화 설정됨: $id, 날짜: $nextReenableDate');
+        }
+      }
+    }
+  }
+
+  // 알람 자동 재활성화 취소
+  Future<void> cancelAutoReenableAlarm(String id) async {
+    final alarms = await getAlarms();
+    final index = alarms.indexWhere((alarm) => alarm.id == id);
+
+    if (index >= 0) {
+      // 자동 재활성화 날짜만 제거하고 다른 상태는 유지
+      alarms[index] = alarms[index].copyWith(
+        autoReenableDate: null,
+      );
+
+      await _saveAlarms(alarms);
+      debugPrint('알람 자동 재활성화 취소됨: $id');
+    }
+  }
+
+  // 모든 알람의 자동 재활성화 날짜 체크 및 처리
+  Future<void> checkAutoReenableAlarms() async {
+    final alarms = await getAlarms();
+    bool hasChanges = false;
+
+    for (int i = 0; i < alarms.length; i++) {
+      final alarm = alarms[i];
+
+      // 자동 재활성화 날짜가 있고, 그 날짜가 현재보다 이전이면 알람 활성화
+      if (alarm.autoReenableDate != null && alarm.isAutoReenableDatePassed()) {
+        debugPrint('자동 재활성화 실행: ${alarm.id}, 날짜: ${alarm.autoReenableDate}');
+
+        // 알람을 활성화하고 재활성화 관련 데이터 초기화
+        alarms[i] = alarm.copyWith(
+          isActive: true,
+          autoReenableDate: null,
+          lastDisabledDate: null,
+        );
+
+        // 알람 다시 스케줄링
+        await _scheduleAlarm(alarms[i]);
+        hasChanges = true;
+      }
+    }
+
+    // 변경된 알람이 있으면 저장
+    if (hasChanges) {
+      await _saveAlarms(alarms);
+    }
   }
 }

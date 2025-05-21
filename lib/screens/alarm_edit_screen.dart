@@ -457,7 +457,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           ['월', '화', '수', '목', '금', '토', '일'][nextAlarmTime.weekday - 1];
       message = '알람이 ${nextAlarmTime.month}월 ${nextAlarmTime.day}일 $weekday요일 '
           '${nextAlarmTime.hour.toString().padLeft(2, '0')}시 '
-          '${nextAlarmTime.minute.toString().padLeft(2, '0')}분에 설정되었어요.';
+          '${nextAlarmTime.minute.toString().padLeft(2, '0')}분에 울립니다.';
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
