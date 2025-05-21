@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:alarm/alarm.dart';
 import '../models/alarm_model.dart';
+import 'notification_service.dart';
 
 class AlarmService {
   static const String _alarmsKey = 'alarms';
@@ -165,6 +166,9 @@ class AlarmService {
       await Alarm.stop(alarmId);
       await Alarm.set(alarmSettings: alarmSettings);
 
+      // NotificationService를 통해 로컬 알림도 설정
+      await NotificationService.instance.scheduleAlarm(alarm);
+
       debugPrint('알람 설정됨: ${alarm.id}, 다음 시간: $nextAlarmDate');
     } catch (e) {
       debugPrint('알람 설정 오류: $e');
@@ -175,6 +179,8 @@ class AlarmService {
   Future<void> _cancelAlarm(String id) async {
     try {
       await Alarm.stop(_generateAlarmId(id));
+      // NotificationService에서도 알림 취소
+      await NotificationService.instance.cancelAlarm(id);
       debugPrint('알람 취소됨: $id');
     } catch (e) {
       debugPrint('알람 취소 오류: $e');

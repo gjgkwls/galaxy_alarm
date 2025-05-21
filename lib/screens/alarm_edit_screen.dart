@@ -425,18 +425,17 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     final today = DateTime(
         now.year, now.month, now.day, _selectedTime.hour, _selectedTime.minute);
 
-    DateTime nextAlarmTime;
+    DateTime nextAlarmTime =
+        today.isAfter(now) ? today : today.add(const Duration(days: 1));
+
+    final difference = nextAlarmTime.difference(now);
+    final hours = difference.inHours;
+    final minutes = difference.inMinutes % 60;
 
     String message = '';
 
     if (_selectedWeekdays.isEmpty) {
       // 반복 없는 일회성 알람인 경우
-      nextAlarmTime =
-          today.isAfter(now) ? today : today.add(const Duration(days: 1));
-
-      final difference = nextAlarmTime.difference(now);
-      final hours = difference.inHours;
-      final minutes = difference.inMinutes % 60;
 
       if (hours > 0) {
         message = '$hours시간 $minutes분 후에 알람이 울립니다';
@@ -450,14 +449,24 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       int currentWeekday = now.weekday;
       if (currentWeekday == 0) currentWeekday = 7; // 일요일인 경우 7로 변환
       int daysUntilNextAlarm = getDaysUntilNextAlarm(_selectedWeekdays);
+      debugPrint('daysUntilNextAlarm: $daysUntilNextAlarm');
 
-      final nextAlarmTime = today.add(Duration(days: daysUntilNextAlarm));
+      if (daysUntilNextAlarm == 0) {
+        if (hours > 0) {
+          message = '$hours시간 $minutes분 후에 알람이 울립니다';
+        } else {
+          message = '$minutes분 후에 알람이 울립니다';
+        }
+      } else {
+        final nextAlarmTime = today.add(Duration(days: daysUntilNextAlarm));
 
-      final weekday =
-          ['월', '화', '수', '목', '금', '토', '일'][nextAlarmTime.weekday - 1];
-      message = '알람이 ${nextAlarmTime.month}월 ${nextAlarmTime.day}일 $weekday요일 '
-          '${nextAlarmTime.hour.toString().padLeft(2, '0')}시 '
-          '${nextAlarmTime.minute.toString().padLeft(2, '0')}분에 울립니다.';
+        final weekday =
+            ['월', '화', '수', '목', '금', '토', '일'][nextAlarmTime.weekday - 1];
+        message =
+            '알람이 ${nextAlarmTime.month}월 ${nextAlarmTime.day}일 $weekday요일 '
+            '${nextAlarmTime.hour.toString().padLeft(2, '0')}시 '
+            '${nextAlarmTime.minute.toString().padLeft(2, '0')}분에 울립니다.';
+      }
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -490,7 +499,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     for (int offset = 0; offset < 7; offset++) {
       int checkIndex = (todayIndex + offset) % 7;
       if (selectedWeekdays[checkIndex]) {
-        return offset == 0 ? 7 : offset; // 오늘이면 일주일 뒤로 간주
+        return offset; // 오늘이면 일주일 뒤로 간주
       }
     }
 

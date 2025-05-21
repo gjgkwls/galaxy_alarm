@@ -227,7 +227,7 @@ class AlarmModel {
     int startDay = includeToday ? 0 : 1;
 
     // 앞으로 2주 동안의 반복 요일 계산
-    for (int i = startDay; i <= 14; i++) {
+    for (int i = startDay; i <= 7; i++) {
       int checkDay = (currentWeekday + i) % 7;
       if (weekdays[checkDay]) {
         futureDays.add(i);

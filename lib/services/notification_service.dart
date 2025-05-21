@@ -117,13 +117,35 @@ class NotificationService {
     // 새 알람 ID 생성
     final notificationId = _getNotificationId(alarm.id);
 
+    // 안드로이드용 알림 채널 생성 (중요도 향상)
+    const String channelId = 'alarm_channel_high';
+    const String channelName = '알람 (높은 중요도)';
+    const String channelDescription = '알람 앱의 중요 알림 채널';
+
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(
+          AndroidNotificationChannel(
+            channelId,
+            channelName,
+            description: channelDescription,
+            importance: Importance.max,
+            sound: RawResourceAndroidNotificationSound(
+                getAlarmSoundName(alarm.ringtone)),
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            showBadge: true,
+          ),
+        );
+
     // 알림 세부 정보 설정
     final androidDetails = AndroidNotificationDetails(
-      'alarm_channel',
-      '알람',
-      channelDescription: '알람 알림 채널',
+      channelId,
+      channelName,
+      channelDescription: channelDescription,
       importance: Importance.max,
-      priority: Priority.high,
       sound: RawResourceAndroidNotificationSound(
           getAlarmSoundName(alarm.ringtone)),
       enableLights: true,
@@ -133,6 +155,21 @@ class NotificationService {
       ongoing: true,
       visibility: NotificationVisibility.public,
       playSound: true,
+      autoCancel: false,
+      ticker: '알람',
+      actions: [
+        const AndroidNotificationAction(
+          'stop',
+          '중지',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        const AndroidNotificationAction(
+          'snooze',
+          '다시 알림',
+          showsUserInterface: true,
+        ),
+      ],
     );
 
     final iosDetails = DarwinNotificationDetails(
@@ -140,6 +177,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive, // 더 높은 중요도
       categoryIdentifier: 'alarm',
       threadIdentifier: 'alarm',
     );
@@ -166,6 +204,8 @@ class NotificationService {
           ? DateTimeComponents.dayOfWeekAndTime
           : DateTimeComponents.time,
       payload: alarm.id,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
 
     debugPrint('알람 스케줄링 완료: ${alarm.id} - ${nextAlarmDate.toString()}');
@@ -188,7 +228,6 @@ class NotificationService {
       '알람',
       channelDescription: '알람 알림 채널',
       importance: Importance.max,
-      priority: Priority.high,
       sound: RawResourceAndroidNotificationSound(
           getAlarmSoundName(alarm.ringtone)),
       enableLights: true,
@@ -228,6 +267,8 @@ class NotificationService {
       notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: alarm.id,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
 
     debugPrint('스누즈 알람 스케줄링 완료: ${alarm.id} - ${snoozeTime.toString()}');

@@ -6,6 +6,9 @@ import 'models/alarm_model.dart';
 import 'screens/alarm_list_screen.dart';
 import 'screens/alarm_ring_screen.dart';
 import 'services/alarm_service.dart';
+import 'services/notification_service.dart';
+import 'dart:io';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 Future<void> main() async {
   // 스플래시 스크린을 위한 바인딩 초기화
@@ -27,6 +30,9 @@ Future<void> main() async {
 
   // Alarm 패키지 초기화
   await Alarm.init();
+
+  // 알림 권한 요청
+  await _requestNotificationPermissions();
 
   // 앱 시작 시 모든 알람 재스케줄링
   final alarmService = AlarmService();
@@ -55,6 +61,34 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+// 알림 권한 요청
+Future<void> _requestNotificationPermissions() async {
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  if (Platform.isIOS) {
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+          critical: true,
+        );
+  } else if (Platform.isAndroid) {
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    // Android 13 (API 33) 이상에서는 명시적 권한 요청 필요
+    await androidImplementation?.requestNotificationsPermission();
+
+    // 정확한 알람 권한 요청 (Android 12+)
+    await androidImplementation?.requestExactAlarmsPermission();
+  }
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -76,6 +110,11 @@ class _MyAppState extends State<MyApp> {
         _onAlarmRinging(alarm.id);
       }
     });
+
+    // NotificationService 알람 이벤트 연결
+    NotificationService.instance.onAlarmFired = (alarmId) {
+      _onNotificationAlarmFired(alarmId);
+    };
 
     // 앱 시작 시 이미 울리고 있는 알람이 있는지 확인
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -100,6 +139,18 @@ class _MyAppState extends State<MyApp> {
           }
         }
       }
+
+      // 앱이 알림을 통해 시작되었는지 확인
+      final notificationAppLaunchDetails =
+          await NotificationService.instance.getNotificationAppLaunchDetails();
+
+      if (notificationAppLaunchDetails != null &&
+          notificationAppLaunchDetails.didNotificationLaunchApp &&
+          notificationAppLaunchDetails.notificationResponse?.payload != null) {
+        final String alarmId =
+            notificationAppLaunchDetails.notificationResponse!.payload!;
+        _onNotificationAlarmFired(alarmId);
+      }
     });
   }
 
@@ -117,6 +168,19 @@ class _MyAppState extends State<MyApp> {
       _navigateToAlarmScreen(alarm);
     } catch (e) {
       debugPrint('알람 화면 이동 중 오류 발생: $e');
+    }
+  }
+
+  // 알림을 통해 알람이 울렸을 때 실행될 콜백
+  Future<void> _onNotificationAlarmFired(String alarmId) async {
+    try {
+      final alarms = await _alarmService.getAlarms();
+      final alarm = alarms.firstWhere((alarm) => alarm.id == alarmId);
+
+      // 알람 화면으로 이동
+      _navigateToAlarmScreen(alarm);
+    } catch (e) {
+      debugPrint('알림 알람 화면 이동 중 오류 발생: $e');
     }
   }
 

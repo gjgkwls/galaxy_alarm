@@ -49,5 +49,13 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>audio</string>
+			<string>processing</string>
+			<string>remote-notification</string>
+		</array>
+		<key>NSUserNotificationsUsageDescription</key>
+		<string>알람 앱이 백그라운드에서도 정확한 시간에 알람 알림을 보내기 위해 알림 권한이 필요합니다.</string>
 	</dict>
 </plist>
