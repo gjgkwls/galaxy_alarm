@@ -147,14 +147,6 @@ class _AlarmListScreenState extends State<AlarmListScreen>
       child: Scaffold(
         appBar: AppBar(
           title: const Text('알람'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () {
-                // 설정 화면으로 이동 (필요시 구현)
-              },
-            ),
-          ],
         ),
         body: _isLoading
             ? Center(
