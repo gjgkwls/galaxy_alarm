@@ -434,7 +434,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
 
     String message = '';
 
-    if (_selectedWeekdays.isEmpty) {
+    if (_selectedWeekdays.every((day) => day == false)) {
       // 반복 없는 일회성 알람인 경우
 
       if (hours > 0) {
@@ -450,6 +450,14 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       if (currentWeekday == 0) currentWeekday = 7; // 일요일인 경우 7로 변환
       int daysUntilNextAlarm = getDaysUntilNextAlarm(_selectedWeekdays);
       debugPrint('daysUntilNextAlarm: $daysUntilNextAlarm');
+
+      // 오늘이 선택된 요일이고 선택된 시간이 현재 시간보다 이전인 경우
+      if (daysUntilNextAlarm == 0 &&
+          (_selectedTime.hour < now.hour ||
+              (_selectedTime.hour == now.hour &&
+                  _selectedTime.minute <= now.minute))) {
+        daysUntilNextAlarm = 7; // 다음 주 같은 요일로 설정
+      }
 
       if (daysUntilNextAlarm == 0) {
         if (hours > 0) {
@@ -498,7 +506,9 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
 
     for (int offset = 0; offset < 7; offset++) {
       int checkIndex = (todayIndex + offset) % 7;
+      debugPrint('checkIndex: $checkIndex');
       if (selectedWeekdays[checkIndex]) {
+        debugPrint('offset: $offset');
         return offset; // 오늘이면 일주일 뒤로 간주
       }
     }
