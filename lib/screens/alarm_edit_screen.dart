@@ -407,6 +407,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
             skipHolidays: _skipHolidays,
             snoozeEnabled: _snoozeEnabled,
             ringtone: _defaultRingtone,
+            isActive: true,
           )
         : AlarmModel.create(
             time: _selectedTime,
