@@ -418,24 +418,30 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           );
 
     // 다음 알람 시간까지 남은 시간 계산
-    final realNow = DateTime.now();
-    final now = DateTime(
-        realNow.year, realNow.month, realNow.day, realNow.hour, realNow.minute);
+    final now = DateTime.now();
 
+    // 오늘 설정한 시간
     final today = DateTime(
         now.year, now.month, now.day, _selectedTime.hour, _selectedTime.minute);
 
-    DateTime nextAlarmTime =
-        today.isAfter(now) ? today : today.add(const Duration(days: 1));
-
-    final difference = nextAlarmTime.difference(now);
-    final hours = difference.inHours;
-    final minutes = difference.inMinutes % 60;
-
     String message = '';
 
-    if (_selectedWeekdays.isEmpty) {
+    // 반복 알람인지 확인
+    final isRepeating = _selectedWeekdays.contains(true);
+
+    if (!isRepeating) {
       // 반복 없는 일회성 알람인 경우
+      DateTime nextAlarmTime = today;
+
+      // 설정 시간이 현재 시간보다 이전이면 다음날로 설정
+      if (today.isBefore(now)) {
+        nextAlarmTime = today.add(const Duration(days: 1));
+      }
+
+      // 정확한 시간 차이 계산
+      final differenceInMinutes = nextAlarmTime.difference(now).inMinutes;
+      final hours = differenceInMinutes ~/ 60;
+      final minutes = differenceInMinutes % 60 + 1;
 
       if (hours > 0) {
         message = '$hours시간 $minutes분 후에 알람이 울립니다';
@@ -444,28 +450,68 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       }
     } else {
       // 반복 알람인 경우
+      // 오늘의 요일 인덱스 (0: 월요일, 1: 화요일, ..., 6: 일요일)
+      final todayIndex = now.weekday - 1;
 
-      // 다음 알람이 울릴 요일 찾기
-      int currentWeekday = now.weekday;
-      if (currentWeekday == 0) currentWeekday = 7; // 일요일인 경우 7로 변환
-      int daysUntilNextAlarm = getDaysUntilNextAlarm(_selectedWeekdays);
-      debugPrint('daysUntilNextAlarm: $daysUntilNextAlarm');
+      // 오늘 요일이 선택되었고, 설정 시간이 현재 시간 이후인 경우
+      if (_selectedWeekdays[todayIndex] && today.isAfter(now)) {
+        final differenceInMinutes = today.difference(now).inMinutes;
+        final hours = differenceInMinutes ~/ 60;
+        final minutes = differenceInMinutes % 60 + 1;
 
-      if (daysUntilNextAlarm == 0) {
         if (hours > 0) {
           message = '$hours시간 $minutes분 후에 알람이 울립니다';
         } else {
           message = '$minutes분 후에 알람이 울립니다';
         }
       } else {
-        final nextAlarmTime = today.add(Duration(days: daysUntilNextAlarm));
+        // 다음 알람이 울릴 요일 찾기
+        int daysUntilNextAlarm = 0;
+        bool foundNextDay = false;
 
-        final weekday =
-            ['월', '화', '수', '목', '금', '토', '일'][nextAlarmTime.weekday - 1];
-        message =
-            '알람이 ${nextAlarmTime.month}월 ${nextAlarmTime.day}일 $weekday요일 '
-            '${nextAlarmTime.hour.toString().padLeft(2, '0')}시 '
-            '${nextAlarmTime.minute.toString().padLeft(2, '0')}분에 울립니다.';
+        // 내일부터 시작해서 선택된 다음 요일 찾기
+        for (int i = 1; i <= 7; i++) {
+          final nextDayIndex = (todayIndex + i) % 7;
+          if (_selectedWeekdays[nextDayIndex]) {
+            daysUntilNextAlarm = i;
+            foundNextDay = true;
+            break;
+          }
+        }
+
+        // 오늘 요일이 선택되었지만 현재 시간이 이미 지난 경우
+        if (!foundNextDay && _selectedWeekdays[todayIndex]) {
+          daysUntilNextAlarm = 7; // 일주일 후 같은 요일
+        }
+
+        final nextAlarmDate = now.add(Duration(days: daysUntilNextAlarm));
+        final nextAlarmTime = DateTime(nextAlarmDate.year, nextAlarmDate.month,
+            nextAlarmDate.day, _selectedTime.hour, _selectedTime.minute);
+
+        // 다음 알람까지 24시간 이내인 경우 시간으로 표시
+        final differenceInMinutes = nextAlarmTime.difference(now).inMinutes;
+        if (differenceInMinutes < 24 * 60) {
+          final hours = differenceInMinutes ~/ 60;
+          final minutes = differenceInMinutes % 60 + 1;
+
+          if (hours > 0) {
+            message = '$hours시간 $minutes분 후에 알람이 울립니다';
+          } else {
+            message = '$minutes분 후에 알람이 울립니다';
+          }
+        } else {
+          // 24시간 이상인 경우 날짜와 시간으로 표시
+          final weekdayLabels = ['월', '화', '수', '목', '금', '토', '일'];
+          final weekday = weekdayLabels[nextAlarmTime.weekday - 1];
+          final amPm = _selectedTime.hour < 12 ? '오전' : '오후';
+          final hour = _selectedTime.hour < 12
+              ? _selectedTime.hour
+              : _selectedTime.hour - 12;
+
+          message = '${nextAlarmTime.month}월 ${nextAlarmTime.day}일 $weekday요일 '
+              '$amPm ${hour == 0 ? 12 : hour}시 '
+              '${_selectedTime.minute.toString().padLeft(2, '0')}분에 알람이 울립니다';
+        }
       }
     }
 
@@ -486,23 +532,5 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
 
     // 저장 후 화면 종료
     Navigator.pop(context, newAlarm);
-  }
-
-  int getDaysUntilNextAlarm(List<bool> selectedWeekdays) {
-    if (selectedWeekdays.length != 7) {
-      throw ArgumentError('selectedWeekdays는 7개의 항목을 가져야 합니다.');
-    }
-
-    final now = DateTime.now();
-    final todayIndex = now.weekday - 1; // DateTime은 월=1 ~ 일=7 → index 0~6으로 맞춤
-
-    for (int offset = 0; offset < 7; offset++) {
-      int checkIndex = (todayIndex + offset) % 7;
-      if (selectedWeekdays[checkIndex]) {
-        return offset; // 오늘이면 일주일 뒤로 간주
-      }
-    }
-
-    return -1; // 선택된 요일이 없을 경우
   }
 }
