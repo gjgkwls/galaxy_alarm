@@ -154,7 +154,10 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
       // 스누즈 설정 완료 메시지 표시
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('5분 후에 다시 알림이 울립니다'),
+          content: Text(
+            '5분 후에 다시 알림이 울립니다',
+            style: TextStyle(color: _textColor),
+          ),
           backgroundColor: _backgroundColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
