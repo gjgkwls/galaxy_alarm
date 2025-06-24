@@ -51,9 +51,21 @@ class AlarmCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildTimeDisplay(),
+                  const Spacer(),
+                  if (alarm.skipHolidays)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: Text(
+                        '공휴일에는 끄기',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: secondaryTextColor,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
                   _buildSwitch(),
                 ],
               ),
@@ -174,7 +186,7 @@ class AlarmCard extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(top: 12.0),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Text(
             infoText,
             style: TextStyle(
@@ -200,7 +212,7 @@ class AlarmCard extends StatelessWidget {
       child: InkWell(
         onTap: onAutoReenableSet,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           decoration: BoxDecoration(
             color: accentColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
