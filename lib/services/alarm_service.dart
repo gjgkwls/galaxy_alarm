@@ -67,24 +67,45 @@ class AlarmService {
 
     if (index >= 0) {
       final alarm = alarms[index];
-      final DateTime? lastDisabledDate =
-          !isActive && alarm.isRepeating ? getNow() : alarm.lastDisabledDate;
 
-      alarms[index] = alarm.copyWith(
-        isActive: isActive,
-        lastDisabledDate: lastDisabledDate,
-        // 알람을 켰을 때는 자동 재활성화 날짜 제거
-        autoReenableDate: isActive ? null : alarm.autoReenableDate,
-      );
-
-      await _saveAlarms(alarms);
-
-      // 알람 활성화/비활성화에 따라 알림 예약 또는 취소
-      if (isActive) {
-        await _scheduleAlarm(alarms[index]);
-      } else {
+      // 알람이 ON -> OFF로 변경될 때
+      if (alarm.isActive && !isActive) {
+        // 새로운 알람 객체 생성 (모든 자동 재활성화 관련 정보 초기화)
+        final newAlarm = AlarmModel(
+          id: alarm.id,
+          time: alarm.time,
+          name: alarm.name,
+          weekdays: alarm.weekdays,
+          isActive: false,
+          skipHolidays: alarm.skipHolidays,
+          snoozeEnabled: alarm.snoozeEnabled,
+          ringtone: alarm.ringtone,
+          lastDisabledDate: getNow(),
+          autoReenableDate: null, // 자동 재활성화 정보 초기화
+        );
+        alarms[index] = newAlarm;
         await _cancelAlarm(id);
       }
+      // 알람이 OFF -> ON으로 변경될 때
+      else if (!alarm.isActive && isActive) {
+        // 새로운 알람 객체 생성 (모든 자동 재활성화 관련 정보 초기화)
+        final newAlarm = AlarmModel(
+          id: alarm.id,
+          time: alarm.time,
+          name: alarm.name,
+          weekdays: alarm.weekdays,
+          isActive: true,
+          skipHolidays: alarm.skipHolidays,
+          snoozeEnabled: alarm.snoozeEnabled,
+          ringtone: alarm.ringtone,
+          lastDisabledDate: null,
+          autoReenableDate: null, // 자동 재활성화 정보 초기화
+        );
+        alarms[index] = newAlarm;
+        await _scheduleAlarm(newAlarm);
+      }
+
+      await _saveAlarms(alarms);
     }
   }
 
@@ -269,19 +290,11 @@ class AlarmService {
         final nextReenableDate = alarm.getNextReenableDate();
 
         if (nextReenableDate != null) {
-          final now = DateTime.now();
-          final currentTimeOfDay = TimeOfDay.fromDateTime(now);
-
-          debugPrint('===== 다시 켜기 설정 정보 =====');
-          debugPrint('현재 시간: ${now.toString()}');
-          debugPrint('알람 시간: ${alarm.time.hour}:${alarm.time.minute}');
-          debugPrint('요일 설정: ${alarm.weekdays}');
-          debugPrint('현재 요일 인덱스: ${now.weekday - 1}');
-          debugPrint('다시 켜기 날짜: ${nextReenableDate.toString()}');
-
           // 자동 재활성화 날짜 설정
           alarms[index] = alarm.copyWith(
             autoReenableDate: nextReenableDate,
+            // 자동 재활성화를 설정할 때 lastDisabledDate도 현재 시간으로 업데이트
+            lastDisabledDate: getNow(),
           );
 
           await _saveAlarms(alarms);
