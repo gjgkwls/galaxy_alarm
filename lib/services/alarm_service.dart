@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:alarm/alarm.dart';
 import '../models/alarm_model.dart';
 import 'notification_service.dart';
+import 'holiday_service.dart';
 
 class AlarmService {
   static const String _alarmsKey = 'alarms';
@@ -13,6 +14,7 @@ class AlarmService {
   // 초기화 메서드
   Future<void> init() async {
     await Alarm.init();
+    await HolidayService.instance.init();
   }
 
   // 모든 알람 가져오기
@@ -151,13 +153,99 @@ class AlarmService {
     await prefs.setStringList(_alarmsKey, alarmsJson);
   }
 
-  // alarm 패키지를 사용하여 알람 스케줄링
+  // 다음 알람 시간 계산
+  Future<DateTime?> getNextAlarmDateTime(AlarmModel alarm,
+      [DateTime? now]) async {
+    now ??= DateTime.now();
+
+    // 비활성화된 알람은 null 반환
+    if (!alarm.isActive) {
+      return null;
+    }
+
+    // 기본 알람 시간 설정 (오늘)
+    DateTime alarmDateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      alarm.time.hour,
+      alarm.time.minute,
+    );
+
+    // 이미 지난 시간이면 다음 날로 설정
+    if (alarmDateTime.isBefore(now)) {
+      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+    }
+
+    // 반복 알람이 아니면 공휴일 체크 후 반환
+    if (!alarm.isRepeating) {
+      if (alarm.skipHolidays &&
+          await HolidayService.instance.isHoliday(alarmDateTime)) {
+        alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+        // 다음 날도 공휴일이면 계속 확인
+        while (await HolidayService.instance.isHoliday(alarmDateTime)) {
+          alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+        }
+      }
+      return alarmDateTime;
+    }
+
+    // 요일 반복 알람일 경우
+    final List<bool> repeatDays = alarm.weekdays;
+    int maxAttempts = 14; // 최대 2주까지 검사
+    int attempts = 0;
+
+    // 현재 날짜가 반복 요일이고 공휴일이 아니면 그대로 반환
+    final int todayWeekday =
+        alarmDateTime.weekday % 7; // 0:일요일, 1:월요일, ..., 6:토요일
+    final int repeatDayIndex = (todayWeekday + 6) % 7; // 요일 인덱스 변환
+
+    if (repeatDays[repeatDayIndex] &&
+        (!alarm.skipHolidays ||
+            !await HolidayService.instance.isHoliday(alarmDateTime)) &&
+        !alarmDateTime.isBefore(now)) {
+      return alarmDateTime;
+    }
+
+    // 다음 알람 시간 찾기
+    alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+    while (attempts < maxAttempts) {
+      final int weekday = alarmDateTime.weekday % 7;
+      final int dayIndex = (weekday + 6) % 7;
+
+      if (repeatDays[dayIndex]) {
+        // 공휴일 체크
+        if (!alarm.skipHolidays ||
+            !await HolidayService.instance.isHoliday(alarmDateTime)) {
+          return alarmDateTime;
+        }
+      }
+
+      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+      attempts++;
+    }
+
+    // 적절한 날짜를 찾지 못한 경우 다음 영업일 반환
+    while (alarm.skipHolidays &&
+        await HolidayService.instance.isHoliday(alarmDateTime)) {
+      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
+    }
+    return alarmDateTime;
+  }
+
+  // 알람 스케줄링
   Future<void> _scheduleAlarm(AlarmModel alarm) async {
     try {
       // 알람 모델에서 다음 알람 시간 계산
-      final DateTime nextAlarmDate = getNextAlarmDateTime(alarm);
+      final DateTime? nextAlarmDate = await getNextAlarmDateTime(alarm);
 
-      // 고유 ID 생성 (문자열 id를 int로 변환)
+      // 다음 알람 시간이 null이면 알람을 설정하지 않음
+      if (nextAlarmDate == null) {
+        debugPrint('알람 설정 취소: ${alarm.id} (비활성화됨)');
+        return;
+      }
+
+      // 고유 ID 생성
       final int alarmId = _generateAlarmId(alarm.id);
 
       // 알람 설정
@@ -212,68 +300,6 @@ class AlarmService {
   int _generateAlarmId(String id) {
     // 간단한 해시 함수로 문자열을 int로 변환
     return id.hashCode.abs() % 1000000;
-  }
-
-  // 다음 알람 시간 계산
-  DateTime getNextAlarmDateTime(AlarmModel alarm) {
-    final now = DateTime.now();
-
-    // 기본 알람 시간 설정 (오늘)
-    DateTime alarmDateTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      alarm.time.hour,
-      alarm.time.minute,
-    );
-
-    // 이미 지난 시간이면 다음 날로 설정
-    if (alarmDateTime.isBefore(now)) {
-      alarmDateTime = alarmDateTime.add(const Duration(days: 1));
-    }
-
-    // 반복 알람이 아니면 그대로 반환
-    if (!alarm.isRepeating) {
-      return alarmDateTime;
-    }
-
-    // 요일 반복 알람일 경우
-    final List<bool> repeatDays = alarm.weekdays;
-
-    // 오늘 요일 (1:월요일, 7:일요일)
-    final int todayWeekday = now.weekday % 7; // 0:일요일, 1:월요일, ..., 6:토요일
-
-    // 반복 요일 확인
-    bool isDaySelected = false;
-    int daysToAdd = 0;
-
-    // 최대 7일(일주일) 동안 반복
-    for (int i = 0; i < 7; i++) {
-      final int checkDay = (todayWeekday + i) % 7; // 확인할 요일
-
-      // repeatDays의 인덱스는 0:월요일, 1:화요일, ..., 6:일요일
-      // 우리 앱은 월요일이 0이지만 날짜 계산은 일요일이 0
-      int repeatDayIndex = (checkDay + 6) % 7; // 요일 인덱스 변환
-
-      if (repeatDays[repeatDayIndex]) {
-        isDaySelected = true;
-        daysToAdd = i;
-
-        // 같은 날이지만 시간이 지났으면 다음 주기로
-        if (i == 0 && alarmDateTime.isBefore(now)) {
-          continue;
-        }
-
-        break;
-      }
-    }
-
-    // 선택된 요일이 없으면 내일로 설정
-    if (!isDaySelected) {
-      return alarmDateTime.add(const Duration(days: 1));
-    }
-
-    return alarmDateTime.add(Duration(days: daysToAdd));
   }
 
   // 알람 자동 재활성화 설정
