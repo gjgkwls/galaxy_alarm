@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:alarm/alarm.dart';
 import 'models/alarm_model.dart';
 import 'screens/alarm_list_screen.dart';
@@ -11,22 +10,19 @@ import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 Future<void> main() async {
-  // 스플래시 스크린을 위한 바인딩 초기화
-  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  // 스플래시 스크린 유지
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  // Flutter 바인딩 초기화
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // 상태바와 네비게이션바 숨기기 (전체 화면 모드)
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.immersiveSticky,
-    overlays: [],
-  );
-
-  // 앱이 화면 전체를 사용하도록 설정
+  // 세로 모드로 고정
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // 시스템 UI 모드 설정 (상태바 표시)
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
   // Alarm 패키지 초기화
   await Alarm.init();
@@ -40,14 +36,6 @@ Future<void> main() async {
 
   // 자동 재활성화 알람 체크
   await alarmService.checkAutoReenableAlarms();
-
-  // 스플래시 스크린 제거 (앱 로딩 완료)
-  FlutterNativeSplash.remove();
-
-  // 스플래시 스크린이 끝나면 상태바 다시 표시
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
 
   // 앱 상태 변화 감지를 위한 옵저버 추가
   SystemChannels.lifecycle.setMessageHandler((msg) async {

@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:alarm/alarm.dart';
 import '../models/alarm_model.dart';
 import '../services/alarm_service.dart';
+import 'dart:async';
 
 class AlarmRingScreen extends StatefulWidget {
   final AlarmModel alarm;
@@ -23,6 +23,9 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
       ValueNotifier<Duration>(Duration.zero);
   Timer? _timer;
   int _alarmId = 0;
+  final AlarmService _alarmService = AlarmService();
+  bool _isSnoozing = false;
+  bool _isStopping = false;
 
   // 색상 테마 정의
   final Color _primaryColor = const Color(0xFFBB86FC); // 보라색 (다크 모드 최적화)
@@ -38,7 +41,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _alarmId = _generateAlarmId(widget.alarm.id);
+    _alarmId = widget.alarm.id.hashCode.abs() % 1000000;
     _startTimer();
     _configureForForeground();
 
@@ -54,9 +57,6 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
         curve: Curves.easeInOut,
       ),
     );
-
-    // 알람 화면이 표시되면 시스템 알람이 이미 재생 중이므로
-    // 추가로 소리를 재생할 필요는 없음
   }
 
   @override
@@ -65,7 +65,6 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     _elapsed.dispose();
     _animationController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    // 앱의 일반 상태로 복원
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -82,9 +81,6 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
     ]);
-
-    // 화면 밝기 최대로 설정 (있을 경우)
-    // 이 기능은 추가 패키지가 필요할 수 있음
   }
 
   @override
@@ -97,85 +93,96 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     }
   }
 
-  // 알람 ID를 int로 변환 (alarm 패키지는 int ID 사용)
-  int _generateAlarmId(String id) {
-    // 간단한 해시 함수로 문자열을 int로 변환
-    return id.hashCode.abs() % 1000000;
-  }
-
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _elapsed.value = Duration(seconds: timer.tick);
     });
   }
 
-  void _dismissAlarm() async {
-    // 알람 소리 중지
-    await Alarm.stop(_alarmId);
-    _timer?.cancel();
-    Navigator.of(context).pop();
-  }
+  Future<void> _snoozeAlarm() async {
+    if (_isSnoozing) return;
+    setState(() => _isSnoozing = true);
 
-  void _snoozeAlarm() async {
-    // 스누즈 기능이 활성화된 경우에만 스누즈
-    if (widget.alarm.snoozeEnabled) {
-      // 기존 알람 중지
+    try {
+      // 현재 알람 중지
       await Alarm.stop(_alarmId);
 
-      // 5분 후로 스누즈 알람 설정
-      final DateTime snoozeTime =
-          DateTime.now().add(const Duration(minutes: 5));
+      // 5분 후로 다시 알림 설정
+      final now = DateTime.now();
+      final snoozeTime = now.add(const Duration(minutes: 5));
 
-      // 알람 설정
-      final alarmSettings = AlarmSettings(
-        id: _alarmId,
-        dateTime: snoozeTime,
-        assetAudioPath: 'assets/sounds/${widget.alarm.ringtone}',
-        loopAudio: true,
-        vibrate: true,
-        androidFullScreenIntent: true,
-        allowAlarmOverlap: true,
-        androidStopAlarmOnTermination: false,
-        volumeSettings: VolumeSettings.fade(
-          volume: 1.0,
-          fadeDuration: const Duration(seconds: 3),
-          volumeEnforced: true,
-        ),
-        notificationSettings: NotificationSettings(
-          title: '스누즈 알람',
-          body: widget.alarm.name.isNotEmpty ? widget.alarm.name : '알람 시간입니다',
-          stopButton: '중지',
+      // 알람 설정 업데이트
+      await _alarmService.saveAlarm(
+        widget.alarm.copyWith(
+          time: TimeOfDay.fromDateTime(snoozeTime),
+          isActive: true,
         ),
       );
 
-      await Alarm.set(alarmSettings: alarmSettings);
-      debugPrint('스누즈 알람 설정: ${widget.alarm.id}, 시간: $snoozeTime');
-
-      // 스누즈 설정 완료 메시지 표시
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '5분 후에 다시 알림이 울립니다',
-            style: TextStyle(color: _textColor),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('5분 후에 다시 알림이 울립니다.'),
+            duration: Duration(seconds: 2),
           ),
-          backgroundColor: _backgroundColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('다시 알림 설정 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('다시 알림 설정에 실패했습니다.'),
+            duration: Duration(seconds: 2),
           ),
-        ),
-      );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSnoozing = false);
     }
+  }
 
-    Navigator.of(context).pop();
+  Future<void> _stopAlarm() async {
+    if (_isStopping) return;
+    setState(() => _isStopping = true);
+
+    try {
+      // 알람 중지
+      await Alarm.stop(_alarmId);
+
+      if (widget.alarm.isRepeating) {
+        // 반복 알람인 경우 다음 알람으로 업데이트
+        await _alarmService.saveAlarm(widget.alarm);
+      } else {
+        // 일회성 알람인 경우 비활성화
+        await _alarmService.saveAlarm(
+          widget.alarm.copyWith(isActive: false),
+        );
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('알람 중지 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('알람 중지에 실패했습니다.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStopping = false);
+    }
   }
 
   String _formatTime(TimeOfDay time) {
     final hour =
         time.hour == 0 ? 12 : (time.hour > 12 ? time.hour - 12 : time.hour);
     final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.hour < 12 ? '오전' : '오후';
-
     return '$hour:$minute';
   }
 
@@ -186,10 +193,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async {
-        // 뒤로 가기 버튼으로 화면을 나갈 수 없게 함
-        return false;
-      },
+      onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: _backgroundColor,
         body: Container(
@@ -335,7 +339,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: ElevatedButton(
-                              onPressed: _snoozeAlarm,
+                              onPressed: _isSnoozing ? null : _snoozeAlarm,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.black.withOpacity(0.5),
                                 foregroundColor: _secondaryTextColor,
@@ -360,7 +364,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: ElevatedButton(
-                              onPressed: _dismissAlarm,
+                              onPressed: _isStopping ? null : _stopAlarm,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _primaryColor,
                                 foregroundColor: Colors.black,
