@@ -3,16 +3,17 @@ import '../models/alarm_model.dart';
 import '../services/alarm_service.dart';
 import '../widgets/alarm_card.dart';
 import 'alarm_edit_screen.dart';
+import '../main.dart'; // RouteObserver import
 
 class AlarmListScreen extends StatefulWidget {
   const AlarmListScreen({super.key});
 
   @override
-  State<AlarmListScreen> createState() => _AlarmListScreenState();
+  AlarmListScreenState createState() => AlarmListScreenState();
 }
 
-class _AlarmListScreenState extends State<AlarmListScreen>
-    with SingleTickerProviderStateMixin {
+class AlarmListScreenState extends State<AlarmListScreen>
+    with SingleTickerProviderStateMixin, RouteAware {
   final AlarmService _alarmService = AlarmService();
   List<AlarmModel> _alarms = [];
   bool _isLoading = true;
@@ -40,9 +41,28 @@ class _AlarmListScreenState extends State<AlarmListScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _animationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    // 다른 화면에서 돌아올 때 알람 목록 새로고침
+    _loadAlarms();
+  }
+
+  // 외부에서 호출 가능한 상태 갱신 메서드
+  void refreshAlarms() {
+    _loadAlarms();
   }
 
   Future<void> _loadAlarms() async {

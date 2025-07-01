@@ -9,6 +9,9 @@ import 'services/notification_service.dart';
 import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+// 전역 RouteObserver 선언
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 Future<void> main() async {
   // Flutter 바인딩 초기화
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +90,8 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final AlarmService _alarmService = AlarmService();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<AlarmListScreenState> _alarmListKey =
+      GlobalKey<AlarmListScreenState>();
 
   @override
   void initState() {
@@ -175,18 +180,23 @@ class _MyAppState extends State<MyApp> {
   // 알람 화면으로 이동
   void _navigateToAlarmScreen(AlarmModel alarm) {
     // 전역 네비게이터 키를 통해 최상단 네비게이터에 접근
-    _navigatorKey.currentState?.push(
+    _navigatorKey.currentState
+        ?.push(
       MaterialPageRoute(
         builder: (context) => AlarmRingScreen(alarm: alarm),
-        fullscreenDialog: true, // 전체 화면 다이얼로그로 표시
       ),
-    );
+    )
+        .then((_) {
+      // 알람 링 화면이 닫힐 때 알람 목록 화면의 상태를 갱신
+      _alarmListKey.currentState?.refreshAlarms();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: _navigatorKey,
+      navigatorObservers: [routeObserver],
       title: 'Galaxy Alarm',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -203,7 +213,7 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const AlarmListScreen(),
+      home: AlarmListScreen(key: _alarmListKey),
       debugShowCheckedModeBanner: false,
     );
   }
